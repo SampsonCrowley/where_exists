@@ -76,7 +76,7 @@ module WhereExists
     associated_models.each do |associated_model|
       primary_key = association.options[:primary_key] || associated_model.primary_key
       other_ids = quote_table_and_column_name(associated_model.table_name, primary_key)
-      query = associated_model.select("1").where("#{self_ids} = #{other_ids}")
+      query = associated_model.unscoped.default_scoped.select("1").where("#{self_ids} = #{other_ids}")
       if where_parameters != []
         query = query.where(*where_parameters)
       end
@@ -121,7 +121,7 @@ module WhereExists
       end
     end
 
-    association_scope = next_association[:scope] || association.scope
+    association_scope = association.scope
 
     associated_model = association.klass
     primary_key = association.options[:primary_key] || self.primary_key
@@ -129,7 +129,7 @@ module WhereExists
     self_ids = quote_table_and_column_name(self.table_name, primary_key)
     associated_ids = quote_table_and_column_name(associated_model.table_name, association.foreign_key)
 
-    result = associated_model.select("1").where("#{associated_ids} = #{self_ids}")
+    result = associated_model.unscoped.default_scoped.select("1").where("#{associated_ids} = #{self_ids}")
 
     if association.options[:as]
       other_types = quote_table_and_column_name(associated_model.table_name, association.type)
@@ -139,16 +139,16 @@ module WhereExists
       result = result.where("#{other_types} IN (?)", class_values.uniq)
     end
 
-    if association_scope
-      result = result.instance_exec(&association_scope)
-    end
-
     if next_association[:association]
       return loop_nested_association(result, next_association)
     end
 
     if where_parameters != []
       result = result.where(*where_parameters)
+    end
+
+    if association_scope
+      result = result.instance_exec(&association_scope)
     end
 
     [result]
@@ -168,6 +168,8 @@ module WhereExists
 
     result =
       associated_model.
+      unscoped.
+      default_scoped.
       select("1").
       joins(
         <<-SQL
